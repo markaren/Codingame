@@ -22,7 +22,7 @@ object SkynetRevolutionEp2 {
 
         val graph = mutableMapOf<Int, MutableList<Int>>()
         for (i in 0 until numNodes) {
-            graph[i] = mutableListOf() //key: Node, Value: The node's neighbours
+            graph[i] = mutableListOf() //key: Tile, Value: The node's neighbours
         }
 
         for (i in 0 until numLinks) {
