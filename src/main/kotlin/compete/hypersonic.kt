@@ -1,149 +1,310 @@
 import java.util.*
 
+fun main(args: Array<String>) {
+    hypersonic.main(args)
+}
 
-const val WIDTH = 13
-const val HEIGHT = 11
+object hypersonic {
 
-val closed = mutableSetOf<Tile>()
-
-/**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
- **/
-fun main(args : Array<String>) {
-    val input = Scanner(System.`in`)
-    val width = input.nextInt()
-    val height = input.nextInt()
-    val myId = input.nextInt()
-
-    var bombPlaced = false
-    var myBombCountdown: Int = -1
-    var movingTo: Tile? = null
-
-    fun move(tile: Tile) {
-        println("MOVE ${tile.x} ${tile.y}")
-        movingTo = tile
+    fun debug(out: Any?) {
+        System.err.println(out)
     }
 
-    fun bomb(tile: Tile) {
-        println("BOMB ${tile.x} ${tile.y}")
-        bombPlaced = true
-        myBombCountdown = 8
-    }
+    fun main(args: Array<String>) {
+        val input = Scanner(System.`in`)
+        val width = input.nextInt()
+        val height = input.nextInt()
+        val myId = input.nextInt()
 
-    // game loop
-    while (true) {
-        val world = World(List(height, {input.next()}))
-        //world.print(System.err)
-
-        var bombJustWentOff = false
-
-        if (bombPlaced) {
-            myBombCountdown--
-            if (myBombCountdown == 0) {
-                System.err.println("ka-boom")
-                bombPlaced = false
-                bombJustWentOff = true
+        fun moveTo(from: Tile, target: Tile) {
+            if (from == target) {
+                debug("Not moving")
             } else {
-                System.err.println("Bomb will explode in ${myBombCountdown} rounds")
+                debug("Moving from $from to $target")
+            }
+            println("MOVE ${target.x} ${target.y}")
+        }
+
+        fun bomb(tile: Tile) {
+            println("BOMB ${tile.x} ${tile.y}")
+        }
+
+        fun isMyPlayer(state: GameState): Boolean {
+            return state.owner == myId && state.entityType == EntityType.PLAYER
+        }
+
+        val world = GameWorld(width, height, input)
+
+        // game loop
+        while (true) {
+
+            for (state in world.newRound()) {
+
+                if (isMyPlayer(state)) {
+                    val myPos = state.tile
+                    world.search(myPos, TraverseOption.BREADTH_FIRST, {
+                        it.isBomb()
+                        //it.isFloor() && it.getNeighbors(true, 1).filter { it.isBomb() }.isNotEmpty() || it.isBomb()
+                    })?.apply {
+                        val availableBombs = state.param1
+                        //debug("availableBombs=$availableBombs")
+                        val dist = myPos.manhattanDistance(this)
+                        if (availableBombs > 0 && dist <= 1) {
+                            bomb(myPos)
+                            myPos.getNeighbors(true,2 ).filter { it.isBomb()}.forEach {
+                                world.closed.add(it)
+                            }
+                        } else {
+                            moveTo(myPos, this)
+                        }
+
+                    } ?: moveTo(myPos, myPos)
+
+                }
+
+            }
+
+        }
+    }
+
+    class BombThingy {
+
+        private var activeBomb = false
+        private var countDown = -1
+
+        fun bombPlaced() {
+            countDown = 9
+            activeBomb = true
+        }
+
+        fun tick(): Boolean {
+            if (activeBomb) {
+                if (countDown-- == 0) {
+                    activeBomb = false
+                    return true
+                }
+            }
+            return false
+        }
+
+    }
+
+    data class GameState(
+            val entityType: EntityType,
+            val owner: Int,
+            val tile: Tile,
+            val param1: Int,
+            val param2: Int
+    )
+
+    enum class EntityType(
+            private val code: Int
+    ) {
+        PLAYER(0), BOMB(1), ITEM(2);
+
+        companion object {
+            fun valueOf(i: Int): EntityType {
+                return values().firstOrNull() { it.code == i } ?: throw IllegalArgumentException()
             }
         }
 
-        val entities = input.nextInt()
-        for (i in 0 until entities) {
-            val entityType = input.nextInt()
-            val owner = input.nextInt()
-            val tile = Tile(input.nextInt(), input.nextInt())
-            val (param1, param2) = input.nextInt() to input.nextInt()
+    }
 
-            if (entityType == 0 && owner == myId) {
-                world.findClosestBoxTo(tile)?.also { closest ->
+    data class Tile(
+            val x: Int,
+            val y: Int,
+            val world: GameWorld
+    ) {
 
-                    System.err.println("Closest box to $tile is $closest")
-                    movingTo?.also { System.err.println("Moving to $movingTo") }
+        fun manhattanDistance(other: Tile): Int {
+            return Math.abs(x - other.x) + Math.abs(y - other.y)
+        }
 
-                    if (movingTo == null || bombPlaced || bombJustWentOff) {
-                        move(closest)
-                    } else if (movingTo!!.dist(tile) > 1) {
-                        move(closest)
-                    } else {
-                        bomb(tile)
-                        closed.add(closest)
+        fun isFloor() = world.get(x, y) == '.'
+        fun isWall() = world.get(x, y) == 'x' || world.get(x, y) == 'X'
+
+        fun isBomb(): Boolean = !isFloor() && !isWall()
+
+        fun getNeighbors(straightLineOnly: Boolean = false, range: Int = 1): List<Tile> {
+
+            fun isValid(x: Int, y: Int): Tile? {
+                return if ((x >= 0) && (y >= 0) && (x < world.width) && (y < world.height)) world.getTile(x,y) else null
+            }
+
+            return mutableListOf<Tile>().apply {
+                for (i in 1 until range+1) {
+                    isValid(x - i, y)?.also { add(it) }
+                    isValid(x + i, y)?.also { add(it) }
+                    isValid(x, y - i)?.also { add(it) }
+                    isValid(x, y + i)?.also { add(it) }
+                    if (!straightLineOnly) {
+                        isValid(x - i, y + i)?.also { add(it) }
+                        isValid(x + i, y - i)?.also { add(it) }
+                        isValid(x - i, y - i)?.also { add(it) }
+                        isValid(x + i, y + i)?.also { add(it) }
                     }
+                }
+            }
+        }
 
-                } ?: move(tile).also {  System.err.println("F") }
+        fun getNeighbors2(): List<Tile> {
+
+            fun isValid(x: Int, y: Int): Tile? {
+                val tile by lazy { world.getTile(x,y) }
+                return (if ((x >= 0) && (y >= 0) && (x < world.width) && (y < world.height) && tile.isFloor()) tile else null)
             }
 
-        }
-
-    }
-
-}
-
-
-data class Tile(
-        val x: Int,
-        val y: Int
-) {
-
-    fun dist(other: Tile): Int {
-        return Math.abs(x-other.x) + Math.abs(y-other.y)
-    }
-
-    fun getNeighbors(): List<Tile> {
-
-        fun isValid(x: Int, y: Int): Tile? {
-            return if ((x < 0) || (y < 0) || (x >= WIDTH) || (y >= HEIGHT)) null else Tile(x,y)
-        }
-
-        return mutableListOf<Tile>().apply {
-            isValid(x-1, y)?.also {add(it)}
-            isValid(x+1, y)?.also {add(it)}
-            isValid(x, y-1)?.also {add(it)}
-            isValid(x, y+1)?.also {add(it)}
-            isValid(x-1, y+1)?.also {add(it)}
-            isValid(x+1, y-1)?.also {add(it)}
-            isValid(x-1, y-1)?.also {add(it)}
-            isValid(x+1, y+1)?.also {add(it)}
-        }
-
-    }
-
-}
-
-class World(
-        private val rows: List<String>
-) {
-
-    fun isFloor(tile: Tile) = rows[tile.y][tile.x] == '.'
-    fun isBox(tile: Tile) = rows[tile.y][tile.x] == '0'
-
-    fun print(out: Appendable) {
-        rows.forEach{out.appendln(it)}
-    }
-
-    fun findClosestBoxTo(start: Tile): Tile? {
-        val visited = mutableSetOf<Tile>().also { it.add(start) }
-        val queue = LinkedList<Tile>().also { it.add(start) }
-
-        while (!queue.isEmpty()) {
-            val current: Tile = queue.poll()
-
-            if (current !in closed && isBox(current)) {
-                return current
+            return mutableListOf<Tile>().apply {
+                isValid(x - 1, y)?.also { add(it) }
+                isValid(x + 1, y)?.also { add(it) }
+                isValid(x, y - 1)?.also { add(it) }
+                isValid(x, y + 1)?.also { add(it) }
+                isValid(x - 1, y)?.also { add(it) }
+                isValid(x + 1, y)?.also { add(it) }
+                isValid(x, y - 1)?.also { add(it) }
+                isValid(x, y + 1)?.also { add(it) }
             }
+        }
 
-            for (neighbor in current.getNeighbors()) {
-                if (neighbor !in visited) { //ignore previously visited nodes
-                    visited.add(neighbor)
-                    queue.add(neighbor)
+        override fun toString(): String {
+            return "Tile(x=$x, y=$y)"
+        }
+
+
+    }
+
+    enum class TraverseOption {
+        DEPTH_FIRST, BREADTH_FIRST
+    }
+
+    class GameWorld(
+            val width: Int,
+            val height: Int,
+            private val input: Scanner
+    ) {
+
+        var closed = mutableSetOf<Tile>()
+        private val bombs = mutableSetOf<Tile>()
+        private val map = mutableListOf<String>()
+
+        fun print(appendable: Appendable) {
+            map.forEach { appendable.appendln(it) }
+        }
+
+        fun newRound(): List<GameState> {
+
+            map.clear()
+            for (i in 0 until height) {
+                map.add(input.next())
+            }
+            //print(System.err)
+            return newStates().also {
+                updateBombs(it)
+            }
+        }
+
+        fun updateBombs(states: List<GameState>) {
+            states.forEach { state ->
+                if (state.entityType == EntityType.BOMB && state.tile !in bombs) {
+                    bombs.add(state.tile)
+                    state.tile.getNeighbors(true, 2).forEach { closed.add(it) }
                 }
             }
 
         }
-        return null //no goal found
+
+        fun get(x: Int, y: Int): Char = map[y][x]
+        fun getTile(x: Int, y: Int) = Tile(x,y,this)
+
+        fun buildGraph(root: Tile): Map<Tile, List<Tile>> {
+            return mutableMapOf<Tile, List<Tile>>().also { map ->
+                traverse(root, TraverseOption.DEPTH_FIRST, {map[root] = root.getNeighbors()})
+            }
+        }
+
+        fun newStates(): List<GameState> {
+            val numEntities = input.nextInt()
+            return List(numEntities, {GameState(
+                    entityType = EntityType.valueOf(input.nextInt()),
+                    owner = input.nextInt(),
+                    tile = getTile(input.nextInt(), input.nextInt()),
+                    param1 = input.nextInt(),
+                    param2 = input.nextInt()
+            )})
+        }
+
+        fun traverse(root: Tile, traverseOption: TraverseOption, traverser: (Tile) -> Unit) {
+            val visited = mutableSetOf<Tile>().apply { add(root) }
+            val queue = LinkedList<Tile>().apply { add(root) }
+
+            while(!queue.isEmpty()) {
+                val u = queue.poll()
+                traverser.invoke(u)
+                for (neighbor in u.getNeighbors()) {
+                    if (neighbor !in visited) {
+                        visited.add(neighbor)
+                        when (traverseOption) {
+                            TraverseOption.BREADTH_FIRST -> queue.add(neighbor)
+                            TraverseOption.DEPTH_FIRST -> queue.addFirst(neighbor)
+                            else -> throw IllegalArgumentException()
+                        }
+                    }
+                }
+            }
+        }
+
+        fun search(root: Tile, traverseOption: TraverseOption, predicate: (Tile) -> Boolean): Tile? {
+
+            val visited = mutableSetOf<Tile>().apply { add(root) }
+            val queue = LinkedList<Tile>().apply { add(root) }
+
+            while(!queue.isEmpty()) {
+                val u = queue.poll()
+                if (predicate.invoke(u)) {
+                    return u
+                }
+                val neighbors = u.getNeighbors()
+                for (neighbor in neighbors) {
+                    if (neighbor !in visited) {
+                        visited.add(neighbor)
+                        when (traverseOption) {
+                            TraverseOption.BREADTH_FIRST -> queue.add(neighbor)
+                            TraverseOption.DEPTH_FIRST -> queue.addFirst(neighbor)
+                            else -> throw IllegalArgumentException()
+                        }
+                    }
+                }
+            }
+            return null
+        }
+
+        fun search2(root: Tile, traverseOption: TraverseOption, predicate: (Tile) -> Boolean): Tile? {
+
+            val visited = mutableSetOf<Tile>().apply { add(root) }
+            val queue = LinkedList<Tile>().apply { add(root) }
+
+            while(!queue.isEmpty()) {
+                val u = queue.poll()
+                if (predicate.invoke(u)) {
+                    return u
+                }
+                val neighbors = u.getNeighbors2()
+                for (neighbor in neighbors) {
+                    if (neighbor !in visited) {
+                        visited.add(neighbor)
+                        when (traverseOption) {
+                            TraverseOption.BREADTH_FIRST -> queue.add(neighbor)
+                            TraverseOption.DEPTH_FIRST -> queue.addFirst(neighbor)
+                            else -> throw IllegalArgumentException()
+                        }
+                    }
+                }
+            }
+            return null
+        }
+
     }
 
+
+
 }
-
-
