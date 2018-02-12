@@ -35,6 +35,8 @@ object hypersonic {
 
         val world = GameWorld(width, height, input)
 
+        val closed = mutableSetOf<Tile>()
+
         // game loop
         while (true) {
 
@@ -42,17 +44,15 @@ object hypersonic {
 
                 if (isMyPlayer(state)) {
                     val myPos = state.tile
-                    world.search(myPos, TraverseOption.BREADTH_FIRST, {
-                        it.isBomb()
-                        //it.isFloor() && it.getNeighbors(true, 1).filter { it.isBomb() }.isNotEmpty() || it.isBomb()
+                    world.search2(myPos, TraverseOption.BREADTH_FIRST, {
+                        it.getNeighbors(true, 1, {it.isBox() && it !in closed}).isNotEmpty()
                     })?.apply {
                         val availableBombs = state.param1
-                        //debug("availableBombs=$availableBombs")
                         val dist = myPos.manhattanDistance(this)
-                        if (availableBombs > 0 && dist <= 1) {
+                        if (availableBombs > 0 && dist <= 2 && (myPos != world.getTile(0,0))) {
                             bomb(myPos)
-                            myPos.getNeighbors(true,2 ).filter { it.isBomb()}.forEach {
-                                world.closed.add(it)
+                            myPos.getNeighbors(true,2, {it.isBox()} ).forEach {
+                                closed.add(it)
                             }
                         } else {
                             moveTo(myPos, this)
@@ -65,28 +65,6 @@ object hypersonic {
             }
 
         }
-    }
-
-    class BombThingy {
-
-        private var activeBomb = false
-        private var countDown = -1
-
-        fun bombPlaced() {
-            countDown = 9
-            activeBomb = true
-        }
-
-        fun tick(): Boolean {
-            if (activeBomb) {
-                if (countDown-- == 0) {
-                    activeBomb = false
-                    return true
-                }
-            }
-            return false
-        }
-
     }
 
     data class GameState(
@@ -123,9 +101,9 @@ object hypersonic {
         fun isFloor() = world.get(x, y) == '.'
         fun isWall() = world.get(x, y) == 'x' || world.get(x, y) == 'X'
 
-        fun isBomb(): Boolean = !isFloor() && !isWall()
+        fun isBox(): Boolean = !isFloor() && !isWall()
 
-        fun getNeighbors(straightLineOnly: Boolean = false, range: Int = 1): List<Tile> {
+        fun getNeighbors(straightLineOnly: Boolean = false, range: Int = 1, predicate: ((Tile) -> Boolean)? = null): List<Tile> {
 
             fun isValid(x: Int, y: Int): Tile? {
                 return if ((x >= 0) && (y >= 0) && (x < world.width) && (y < world.height)) world.getTile(x,y) else null
@@ -133,36 +111,17 @@ object hypersonic {
 
             return mutableListOf<Tile>().apply {
                 for (i in 1 until range+1) {
-                    isValid(x - i, y)?.also { add(it) }
-                    isValid(x + i, y)?.also { add(it) }
-                    isValid(x, y - i)?.also { add(it) }
-                    isValid(x, y + i)?.also { add(it) }
+                    isValid(x - i, y)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
+                    isValid(x + i, y)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
+                    isValid(x, y - i)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
+                    isValid(x, y + i)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
                     if (!straightLineOnly) {
-                        isValid(x - i, y + i)?.also { add(it) }
-                        isValid(x + i, y - i)?.also { add(it) }
-                        isValid(x - i, y - i)?.also { add(it) }
-                        isValid(x + i, y + i)?.also { add(it) }
+                        isValid(x - i, y + i)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
+                        isValid(x + i, y - i)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
+                        isValid(x - i, y - i)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
+                        isValid(x + i, y + i)?.also { predicate?.apply { if (invoke(it)) add(it) } ?: add(it) }
                     }
                 }
-            }
-        }
-
-        fun getNeighbors2(): List<Tile> {
-
-            fun isValid(x: Int, y: Int): Tile? {
-                val tile by lazy { world.getTile(x,y) }
-                return (if ((x >= 0) && (y >= 0) && (x < world.width) && (y < world.height) && tile.isFloor()) tile else null)
-            }
-
-            return mutableListOf<Tile>().apply {
-                isValid(x - 1, y)?.also { add(it) }
-                isValid(x + 1, y)?.also { add(it) }
-                isValid(x, y - 1)?.also { add(it) }
-                isValid(x, y + 1)?.also { add(it) }
-                isValid(x - 1, y)?.also { add(it) }
-                isValid(x + 1, y)?.also { add(it) }
-                isValid(x, y - 1)?.also { add(it) }
-                isValid(x, y + 1)?.also { add(it) }
             }
         }
 
@@ -183,7 +142,6 @@ object hypersonic {
             private val input: Scanner
     ) {
 
-        var closed = mutableSetOf<Tile>()
         private val bombs = mutableSetOf<Tile>()
         private val map = mutableListOf<String>()
 
@@ -199,19 +157,18 @@ object hypersonic {
             }
             //print(System.err)
             return newStates().also {
-                updateBombs(it)
+               // updateBombs(it)
             }
         }
 
-        fun updateBombs(states: List<GameState>) {
-            states.forEach { state ->
-                if (state.entityType == EntityType.BOMB && state.tile !in bombs) {
-                    bombs.add(state.tile)
-                    state.tile.getNeighbors(true, 2).forEach { closed.add(it) }
-                }
-            }
-
-        }
+//        fun updateBombs(states: List<GameState>) {
+//            states.forEach { state ->
+//                if (state.entityType == EntityType.BOMB && state.tile !in bombs) {
+//                    bombs.add(state.tile)
+//                }
+//            }
+//
+//        }
 
         fun get(x: Int, y: Int): Char = map[y][x]
         fun getTile(x: Int, y: Int) = Tile(x,y,this)
@@ -288,7 +245,7 @@ object hypersonic {
                 if (predicate.invoke(u)) {
                     return u
                 }
-                val neighbors = u.getNeighbors2()
+                val neighbors = u.getNeighbors(true, 1, {it.isFloor()})
                 for (neighbor in neighbors) {
                     if (neighbor !in visited) {
                         visited.add(neighbor)
