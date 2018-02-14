@@ -1,33 +1,28 @@
 import java.util.*
 
-/**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
- *
- *  Discussion from https://stackoverflow.com/questions/1579399/shortest-path-fewest-nodes-for-unweighted-graph
- *  was helpful in finding a way to backtrack using BFS:
- *
- **/
+
 fun main(args : Array<String>) {
-    SkynetRevolutionEp1.run(args)
+    SkynetRevolutionEp1.main(args)
 }
 
 object SkynetRevolutionEp1 {
 
-    fun run(args : Array<String>) {
+    fun main(args : Array<String>) {
+
         val input = Scanner(System.`in`)
         val numNodes = input.nextInt() // the total number of nodes in the level, including the gateways
         val numLinks = input.nextInt() // the number of links
         val numGateways = input.nextInt() // the number of exit gateways
 
-        val graph = mutableMapOf<Int, MutableList<Int>>()
+        val graph = mutableMapOf<Int, MutableList<Int>>() //key: Node, Value: A list of the node's neighbours
         for (i in 0 until numNodes) {
-            graph[i] = mutableListOf() //key: Tile, Value: The node's neighbours
+            graph[i] = mutableListOf()
         }
 
         for (i in 0 until numLinks) {
             val src = input.nextInt()
             val dst = input.nextInt()
+
             //assign neighbours to nodes
             graph[src]!!.add(dst)
             graph[dst]!!.add(src)
@@ -49,7 +44,7 @@ object SkynetRevolutionEp1 {
     }
 
     /**
-     * Find the next edge to cu using a Breadth First Search
+     * Find the next edge to cut using a Breadth First Search
      * Returns an edge once it reaches a goal node.
      *
      * @start skynet agent
@@ -67,7 +62,7 @@ object SkynetRevolutionEp1 {
             val current = queue.poll()
 
             if (current in goals) {
-                return prev[current]!! to current
+                return prev[current]!! to current //return the link leading to the goal
             }
 
             for (neighbour in graph[current]!!) {
