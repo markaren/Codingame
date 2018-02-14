@@ -1,13 +1,6 @@
 import java.util.*
 
-/**
- * Auto-generated code below aims at helping you parse
- * the standard input according to the problem statement.
- *
- *  Discussion from https://stackoverflow.com/questions/1579399/shortest-path-fewest-nodes-for-unweighted-graph
- *  was helpful in finding a way to backtrack using BFS:
- *
- **/
+
 fun main(args : Array<String>) {
     SkynetRevolutionEp2.run(args)
 }
@@ -49,15 +42,20 @@ object SkynetRevolutionEp2 {
     }
 
     /**
-     * Find the next edge to cu using a Breadth First Search
+     * Find the next edge to cut using a Djikstra.
      * Returns an edge once it reaches a goal node.
+     *
+     * Implementation based on wikipedia pseudocode
      *
      * @start skynet agent
      * @goals exit gateways
      *
+     * @return link to sewer
+     *
      */
     fun findEdgeToCut(graph: Map<Int, List<Int>>, start: Int, goals: List<Int>) : Pair<Int, Int>? {
 
+        //prioritize link with more neighbours
         fun length(u: Int, v: Int): Double {
             return if (v !in goals)  1.0 else 1.0 / graph[u]!!.size
         }
@@ -76,7 +74,6 @@ object SkynetRevolutionEp2 {
 
         while (!vertexSet.isEmpty()) {
             val u = vertexSet.sortedBy { dist[it] }[0]
-
             vertexSet.remove(u)
 
             if (u in goals) {

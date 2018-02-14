@@ -81,7 +81,7 @@ object hypersonic_wood_2_league {
                         } else if (movingTo!!.manhattanDistance(tile) > 1) {
                             moveTo(tile, box)
                         } else {
-                            bomb(tile)//.also { closed.add(box) }
+                            bomb(tile)//.also { boxesNotToConsider.add(box) }
                         }
 
                     } ?: moveTo(tile, tile)
